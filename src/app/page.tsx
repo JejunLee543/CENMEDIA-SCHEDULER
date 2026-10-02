@@ -1,20 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ScheduleForm from "@/components/ScheduleForm";
 import ScheduleList from "@/components/ScheduleList";
 import type { Schedule } from "@/types/schedule";
 
 export default function Home() {
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleAddSchedule = (schedule: Omit<Schedule, "id" | "createdAt">) => {
-    const newSchedule: Schedule = {
-      ...schedule,
-      id: crypto.randomUUID(),
-      createdAt: Date.now(),
-    };
+  useEffect(() => {
+    fetch("/api/schedules")
+      .then((res) => res.json())
+      .then((data: Schedule[]) => setSchedules(data))
+      .catch(() => setError("일정을 불러오지 못했습니다."))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleAddSchedule = async (schedule: Omit<Schedule, "id" | "createdAt">) => {
+    const res = await fetch("/api/schedules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(schedule),
+    });
+
+    if (!res.ok) {
+      setError("일정 등록에 실패했습니다.");
+      return;
+    }
+
+    const newSchedule: Schedule = await res.json();
     setSchedules((prev) => [newSchedule, ...prev].sort((a, b) => b.createdAt - a.createdAt));
+    setError(null);
   };
 
   return (
@@ -28,9 +46,17 @@ export default function Home() {
 
       <ScheduleForm onSubmit={handleAddSchedule} />
 
+      {error && (
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      )}
+
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">등록된 일정</h2>
-        <ScheduleList schedules={schedules} />
+        {loading ? (
+          <p className="text-sm text-black/60 dark:text-white/60">불러오는 중...</p>
+        ) : (
+          <ScheduleList schedules={schedules} />
+        )}
       </section>
     </main>
   );
