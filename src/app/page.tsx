@@ -3,17 +3,18 @@
 import { useEffect, useState } from "react";
 import ScheduleForm from "@/components/ScheduleForm";
 import ScheduleList from "@/components/ScheduleList";
-import type { Schedule } from "@/types/schedule";
+import type { NoteInput } from "@/components/ScheduleNotes";
+import type { Schedule, ScheduleNote, ScheduleWithNotes } from "@/types/schedule";
 
 export default function Home() {
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [schedules, setSchedules] = useState<ScheduleWithNotes[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/schedules")
       .then((res) => res.json())
-      .then((data: Schedule[]) => setSchedules(data))
+      .then((data: ScheduleWithNotes[]) => setSchedules(data))
       .catch(() => setError("일정을 불러오지 못했습니다."))
       .finally(() => setLoading(false));
   }, []);
@@ -30,8 +31,46 @@ export default function Home() {
       return;
     }
 
-    const newSchedule: Schedule = await res.json();
+    const newSchedule: ScheduleWithNotes = await res.json();
     setSchedules((prev) => [newSchedule, ...prev].sort((a, b) => b.createdAt - a.createdAt));
+    setError(null);
+  };
+
+  const handleAddNote = async (scheduleId: string, note: NoteInput) => {
+    const res = await fetch(`/api/schedules/${scheduleId}/notes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(note),
+    });
+
+    if (!res.ok) {
+      setError("메모 등록에 실패했습니다.");
+      return false;
+    }
+
+    const newNote: ScheduleNote = await res.json();
+    setSchedules((prev) =>
+      prev.map((s) => (s.id === scheduleId ? { ...s, notes: [...s.notes, newNote] } : s))
+    );
+    setError(null);
+    return true;
+  };
+
+  const handleDeleteNote = async (scheduleId: string, noteId: string) => {
+    const res = await fetch(`/api/schedules/${scheduleId}/notes/${noteId}`, {
+      method: "DELETE",
+    });
+
+    if (!res.ok) {
+      setError("메모 삭제에 실패했습니다.");
+      return;
+    }
+
+    setSchedules((prev) =>
+      prev.map((s) =>
+        s.id === scheduleId ? { ...s, notes: s.notes.filter((n) => n.id !== noteId) } : s
+      )
+    );
     setError(null);
   };
 
@@ -55,7 +94,11 @@ export default function Home() {
         {loading ? (
           <p className="text-sm text-black/60 dark:text-white/60">불러오는 중...</p>
         ) : (
-          <ScheduleList schedules={schedules} />
+          <ScheduleList
+            schedules={schedules}
+            onAddNote={handleAddNote}
+            onDeleteNote={handleDeleteNote}
+          />
         )}
       </section>
     </main>

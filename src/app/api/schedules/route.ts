@@ -1,12 +1,14 @@
-import { desc } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { schedules } from "@/db/schema";
-import { SCHEDULE_TYPES, type Schedule } from "@/types/schedule";
+import { SCHEDULE_TYPES, type Schedule, type ScheduleWithNotes } from "@/types/schedule";
 
 export async function GET() {
-  const rows = await db.select().from(schedules).orderBy(desc(schedules.createdAt));
-  const result: Schedule[] = rows.map((row) => ({
+  const rows = await db.query.schedules.findMany({
+    orderBy: (schedules, { desc }) => [desc(schedules.createdAt)],
+    with: { notes: { orderBy: (notes, { asc }) => [asc(notes.createdAt)] } },
+  });
+  const result: ScheduleWithNotes[] = rows.map((row) => ({
     ...row,
     startTime: row.startTime.slice(0, 5),
     endTime: row.endTime.slice(0, 5),
@@ -44,5 +46,6 @@ export async function POST(request: Request) {
 
   await db.insert(schedules).values(schedule);
 
-  return NextResponse.json(schedule, { status: 201 });
+  const result: ScheduleWithNotes = { ...schedule, notes: [] };
+  return NextResponse.json(result, { status: 201 });
 }

@@ -13,3 +13,15 @@ export interface Schedule {
   location: string;
   createdAt: number;
 }
+
+export interface ScheduleNote {
+  id: string;
+  scheduleId: string;
+  content: string;
+  author: string | null;
+  createdAt: number;
+}
+
+export interface ScheduleWithNotes extends Schedule {
+  notes: ScheduleNote[];
+}

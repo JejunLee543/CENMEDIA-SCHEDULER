@@ -1,4 +1,5 @@
-import type { Schedule, ScheduleType } from "@/types/schedule";
+import ScheduleNotes, { type NoteInput } from "@/components/ScheduleNotes";
+import type { ScheduleType, ScheduleWithNotes } from "@/types/schedule";
 
 const TYPE_STYLES: Record<ScheduleType, string> = {
   촬영: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300",
@@ -18,7 +19,13 @@ function formatDate(date: string) {
   });
 }
 
-export default function ScheduleList({ schedules }: { schedules: Schedule[] }) {
+interface ScheduleListProps {
+  schedules: ScheduleWithNotes[];
+  onAddNote: (scheduleId: string, note: NoteInput) => Promise<boolean>;
+  onDeleteNote: (scheduleId: string, noteId: string) => void;
+}
+
+export default function ScheduleList({ schedules, onAddNote, onDeleteNote }: ScheduleListProps) {
   if (schedules.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-black/15 dark:border-white/20 p-10 text-center text-sm text-black/50 dark:text-white/50">
@@ -62,6 +69,11 @@ export default function ScheduleList({ schedules }: { schedules: Schedule[] }) {
               <dd>{schedule.location}</dd>
             </div>
           </dl>
+          <ScheduleNotes
+            notes={schedule.notes}
+            onAdd={(note) => onAddNote(schedule.id, note)}
+            onDelete={(noteId) => onDeleteNote(schedule.id, noteId)}
+          />
         </li>
       ))}
     </ul>
