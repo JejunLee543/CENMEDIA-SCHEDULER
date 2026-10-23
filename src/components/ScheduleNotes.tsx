@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import type { ScheduleNote } from "@/types/schedule";
 
 export type NoteInput = Pick<ScheduleNote, "content" | "author">;
@@ -8,7 +8,7 @@ export type NoteInput = Pick<ScheduleNote, "content" | "author">;
 interface ScheduleNotesProps {
   notes: ScheduleNote[];
   onAdd: (note: NoteInput) => Promise<boolean>;
-  onDelete: (noteId: string) => void;
+  onDelete: (noteId: string) => Promise<void>;
 }
 
 function formatDateTime(timestamp: number) {
@@ -24,15 +24,38 @@ export default function ScheduleNotes({ notes, onAdd, onDelete }: ScheduleNotesP
   const [content, setContent] = useState("");
   const [author, setAuthor] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  // Guards against a second click landing before the disabled state re-renders
+  const deletingRef = useRef<Set<string>>(new Set());
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!content.trim() || submitting) return;
 
     setSubmitting(true);
-    const ok = await onAdd({ content: content.trim(), author: author.trim() || null });
-    setSubmitting(false);
-    if (ok) setContent("");
+    try {
+      const ok = await onAdd({ content: content.trim(), author: author.trim() || null });
+      if (ok) setContent("");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (noteId: string) => {
+    if (deletingRef.current.has(noteId)) return;
+
+    deletingRef.current.add(noteId);
+    setDeletingIds((prev) => new Set(prev).add(noteId));
+    try {
+      await onDelete(noteId);
+    } finally {
+      deletingRef.current.delete(noteId);
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(noteId);
+        return next;
+      });
+    }
   };
 
   return (
@@ -57,9 +80,10 @@ export default function ScheduleNotes({ notes, onAdd, onDelete }: ScheduleNotesP
               </div>
               <button
                 type="button"
-                onClick={() => onDelete(note.id)}
+                onClick={() => handleDelete(note.id)}
+                disabled={deletingIds.has(note.id)}
                 aria-label="메모 삭제"
-                className="shrink-0 text-xs text-black/40 hover:text-red-600 dark:text-white/40 dark:hover:text-red-400 transition-colors"
+                className="shrink-0 text-xs text-black/40 hover:text-red-600 dark:text-white/40 dark:hover:text-red-400 disabled:opacity-40 transition-colors"
               >
                 삭제
               </button>

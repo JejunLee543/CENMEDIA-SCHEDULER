@@ -1,44 +1,47 @@
-import { asc, eq } from "drizzle-orm";
+import { DrizzleQueryError } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { scheduleNotes, schedules } from "@/db/schema";
+import { scheduleNotes } from "@/db/schema";
 import type { ScheduleNote } from "@/types/schedule";
 
-export async function GET(_request: Request, ctx: RouteContext<"/api/schedules/[id]/notes">) {
-  const { id } = await ctx.params;
-  const notes: ScheduleNote[] = await db
-    .select()
-    .from(scheduleNotes)
-    .where(eq(scheduleNotes.scheduleId, id))
-    .orderBy(asc(scheduleNotes.createdAt));
-  return NextResponse.json(notes);
-}
+const FOREIGN_KEY_VIOLATION = "23503";
 
 export async function POST(request: Request, ctx: RouteContext<"/api/schedules/[id]/notes">) {
   const { id } = await ctx.params;
-  const body = (await request.json()) as Partial<Pick<ScheduleNote, "content" | "author">>;
 
-  if (!body.content?.trim()) {
-    return NextResponse.json({ error: "메모 내용을 입력하세요." }, { status: 400 });
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
 
-  const [schedule] = await db
-    .select({ id: schedules.id })
-    .from(schedules)
-    .where(eq(schedules.id, id));
-  if (!schedule) {
-    return NextResponse.json({ error: "일정을 찾을 수 없습니다." }, { status: 404 });
+  const { content, author } = (body ?? {}) as Record<string, unknown>;
+  if (typeof content !== "string" || !content.trim()) {
+    return NextResponse.json({ error: "메모 내용을 입력하세요." }, { status: 400 });
+  }
+  if (author != null && typeof author !== "string") {
+    return NextResponse.json({ error: "잘못된 작성자입니다." }, { status: 400 });
   }
 
   const note: ScheduleNote = {
     id: crypto.randomUUID(),
     scheduleId: id,
-    content: body.content.trim(),
-    author: body.author?.trim() || null,
+    content: content.trim(),
+    author: author?.trim() || null,
     createdAt: Date.now(),
   };
 
-  await db.insert(scheduleNotes).values(note);
+  try {
+    await db.insert(scheduleNotes).values(note);
+  } catch (err) {
+    // The FK on schedule_id rejects notes for a schedule that doesn't exist (or was just deleted)
+    const cause = err instanceof DrizzleQueryError ? err.cause : err;
+    if ((cause as { code?: string } | undefined)?.code === FOREIGN_KEY_VIOLATION) {
+      return NextResponse.json({ error: "일정을 찾을 수 없습니다." }, { status: 404 });
+    }
+    throw err;
+  }
 
   return NextResponse.json(note, { status: 201 });
 }

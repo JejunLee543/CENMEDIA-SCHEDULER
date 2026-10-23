@@ -37,41 +37,43 @@ export default function Home() {
   };
 
   const handleAddNote = async (scheduleId: string, note: NoteInput) => {
-    const res = await fetch(`/api/schedules/${scheduleId}/notes`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(note),
-    });
+    try {
+      const res = await fetch(`/api/schedules/${scheduleId}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(note),
+      });
+      if (!res.ok) throw new Error();
 
-    if (!res.ok) {
+      const newNote: ScheduleNote = await res.json();
+      setSchedules((prev) =>
+        prev.map((s) => (s.id === scheduleId ? { ...s, notes: [...s.notes, newNote] } : s))
+      );
+      setError(null);
+      return true;
+    } catch {
       setError("메모 등록에 실패했습니다.");
       return false;
     }
-
-    const newNote: ScheduleNote = await res.json();
-    setSchedules((prev) =>
-      prev.map((s) => (s.id === scheduleId ? { ...s, notes: [...s.notes, newNote] } : s))
-    );
-    setError(null);
-    return true;
   };
 
   const handleDeleteNote = async (scheduleId: string, noteId: string) => {
-    const res = await fetch(`/api/schedules/${scheduleId}/notes/${noteId}`, {
-      method: "DELETE",
-    });
+    try {
+      const res = await fetch(`/api/schedules/${scheduleId}/notes/${noteId}`, {
+        method: "DELETE",
+      });
+      // 404 means the note is already gone, so drop it from the list either way
+      if (!res.ok && res.status !== 404) throw new Error();
 
-    if (!res.ok) {
+      setSchedules((prev) =>
+        prev.map((s) =>
+          s.id === scheduleId ? { ...s, notes: s.notes.filter((n) => n.id !== noteId) } : s
+        )
+      );
+      setError(null);
+    } catch {
       setError("메모 삭제에 실패했습니다.");
-      return;
     }
-
-    setSchedules((prev) =>
-      prev.map((s) =>
-        s.id === scheduleId ? { ...s, notes: s.notes.filter((n) => n.id !== noteId) } : s
-      )
-    );
-    setError(null);
   };
 
   return (

@@ -22,7 +22,7 @@ function formatDate(date: string) {
 interface ScheduleListProps {
   schedules: ScheduleWithNotes[];
   onAddNote: (scheduleId: string, note: NoteInput) => Promise<boolean>;
-  onDeleteNote: (scheduleId: string, noteId: string) => void;
+  onDeleteNote: (scheduleId: string, noteId: string) => Promise<void>;
 }
 
 export default function ScheduleList({ schedules, onAddNote, onDeleteNote }: ScheduleListProps) {
