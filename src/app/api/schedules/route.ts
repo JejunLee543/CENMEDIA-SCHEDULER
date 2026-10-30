@@ -1,6 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { db } from "@/db";
 import { schedules } from "@/db/schema";
+import { notifyEmailScheduleCreated } from "@/lib/email";
+import { notifyNaverWorksScheduleCreated } from "@/lib/naverWorks";
 import { SCHEDULE_TYPES, type Schedule, type ScheduleWithNotes } from "@/types/schedule";
 
 export async function GET() {
@@ -17,7 +19,18 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as Partial<Omit<Schedule, "id" | "createdAt">>;
+  let parsed: unknown;
+  try {
+    parsed = await request.json();
+  } catch {
+    return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
+  }
+
+  const body = (parsed ?? {}) as Partial<Omit<Schedule, "id" | "createdAt">>;
+  const textFields = [body.title, body.date, body.startTime, body.endTime, body.manager, body.location];
+  if (textFields.some((value) => typeof value !== "string")) {
+    return NextResponse.json({ error: "필수 항목이 누락되었습니다." }, { status: 400 });
+  }
 
   if (
     !body.title?.trim() ||
@@ -45,6 +58,9 @@ export async function POST(request: Request) {
   };
 
   await db.insert(schedules).values(schedule);
+  after(() =>
+    Promise.all([notifyEmailScheduleCreated(schedule), notifyNaverWorksScheduleCreated(schedule)]),
+  );
 
   const result: ScheduleWithNotes = { ...schedule, notes: [] };
   return NextResponse.json(result, { status: 201 });
